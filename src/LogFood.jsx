@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { collection, getDocs, addDoc, query, where } from 'firebase/firestore'; 
+import { collection, getDocs, addDoc, query, where } from 'firebase/firestore';
 import { db } from './firebase';
 
 function LogFood({ user }) {
   const [isEditing, setIsEditing] = useState(false);
   const [foodEntries, setFoodEntries] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   const [foodItem, setFoodItem] = useState('');
   const [pawScale, setPawScale] = useState('');
@@ -18,12 +19,14 @@ function LogFood({ user }) {
           ...doc.data(),
           id: doc.id
         }));
+        fetched.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
         setFoodEntries(fetched);
       } catch (e) {
         console.error("Error fetching food: ", e);
       }
+      setLoading(false);
     }
-    
+
     if (user) {
       getFoodFromDb();
     }
@@ -40,7 +43,7 @@ function LogFood({ user }) {
 
     try {
       const docRef = await addDoc(collection(db, "food"), {
-        userId: user.uid, 
+        userId: user.uid,
         foodItem: foodItem,
         pawScale: pawScale,
         timestamp: formattedDate
@@ -54,14 +57,21 @@ function LogFood({ user }) {
         timestamp: formattedDate
       };
 
-      setFoodEntries(foodEntries.concat([newEntry]));
-      
+      setFoodEntries([newEntry, ...foodEntries]);
       setFoodItem('');
       setPawScale('');
-      setIsEditing(false); 
+      setIsEditing(false);
     } catch (e) {
       console.error("Error logging food: ", e);
     }
+  }
+
+  function formatTimestamp(timestamp) {
+    if (!timestamp) return { datePart: '', timePart: '' };
+    const parts = timestamp.split(', ');
+    const timePart = parts[parts.length - 1];
+    const datePart = parts.slice(0, parts.length - 1).join(', ');
+    return { datePart, timePart };
   }
 
   return (
@@ -69,27 +79,25 @@ function LogFood({ user }) {
       <button className="main-log-btn" onClick={() => setIsEditing(true)}>
         Log Food
       </button>
-      
+
       {isEditing && (
         <form className="modal-overlay" onSubmit={handleSubmit}>
-          {/* Native HTML entity for 'X' */}
           <button type="button" className="close-btn" onClick={() => setIsEditing(false)}>&times;</button>
-          
           <h2>Log Food</h2>
-          <input 
-            type="text" 
-            placeholder="Food Item Description (e.g. Sponge Cake)" 
+          <input
+            type="text"
+            placeholder="Food Item Description (e.g. Sponge Cake)"
             value={foodItem}
             onChange={(e) => setFoodItem(e.target.value)}
           />
-
-          <select value={pawScale} onChange={(e) => setPawScale(e.target.value)}>
-            <option value="">Paw Scale Amount (Dropdown)</option>
-            <option value="Half a Paw">Half a Paw</option>
-            <option value="One Full Paw">One Full Paw</option>
-            <option value="Two Paws">Two Paws</option>
-          </select>
-
+          <input
+            type="number"
+            min="0"
+            step="0.5"
+            placeholder="Paw Scale Amount (e.g. 1.5)"
+            value={pawScale}
+            onChange={(e) => setPawScale(e.target.value)}
+          />
           <button type="submit" className="form-submit-btn">Submit Log to Feed</button>
         </form>
       )}
@@ -97,16 +105,27 @@ function LogFood({ user }) {
       <div className="entries-box">
         <h3>Food Intake Entries</h3>
         <div className="feed-list">
-          {foodEntries.map((item) => (
-            <div key={item.id} className="entry-card">
-              <div className="entry-header">
-                <span className="entry-date">{item.timestamp}</span>
-                {/* No user name or pet name displayed here anymore */}
+          {loading && <p className="empty-msg">Loading entries...</p>}
+          {!loading && foodEntries.length === 0 && (
+            <p className="empty-msg">No food entries yet.</p>
+          )}
+          {foodEntries.map((item) => {
+            const { datePart, timePart } = formatTimestamp(item.timestamp);
+            return (
+              <div key={item.id} className="entry-card">
+                <div className="entry-header">
+                  <div className="entry-timestamp">
+                    <span className="entry-date">{datePart}</span>
+                    <span className="entry-time">{timePart}</span>
+                  </div>
+                </div>
+                <p className="entry-main-text">{item.foodItem}</p>
+                <p className="entry-subtext-paw">
+                  Scale Amount: {item.pawScale} {parseFloat(item.pawScale) <= 1 ? 'Paw' : 'Paws'}
+                </p>
               </div>
-              <p className="entry-main-text">{item.foodItem}</p>
-              <p className="entry-subtext-paw">Scale: <em>{item.pawScale}</em></p>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>

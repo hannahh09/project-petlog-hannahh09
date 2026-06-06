@@ -8,35 +8,44 @@ import LogFood from './LogFood';
 
 function Home() {
   const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
-    onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       if (currentUser) {
-        setUser(currentUser);
+        await currentUser.reload();
+        setUser(auth.currentUser);
       } else {
         setUser(null);
         navigate("/login");
       }
+      setLoading(false);
     });
+    return () => unsubscribe();
   }, [navigate]);
 
   const handleSignOut = () => {
     signOut(auth);
   };
 
+  if (loading) {
+    return <div className="auth-container"><p>Loading...</p></div>;
+  }
+
   return (
-    <div className="home-dashboard">
-      <div className="dashboard-top-bar">
+    <div className="app-container">
+      <header className="app-header">
+        <h1>Pet Log</h1>
         <div className="user-info">
           <span>{user ? user.displayName : ''}</span>
           <button className="logout-btn" onClick={handleSignOut}>Logout</button>
         </div>
-      </div>
-      
+      </header>
+
       <main className="main-content">
-        <LogSymptom user={user} />
-        <LogFood user={user} />
+        {user && <LogSymptom user={user} />}
+        {user && <LogFood user={user} />}
       </main>
     </div>
   );
